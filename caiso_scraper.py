@@ -1,3 +1,15 @@
+import json
+import os
+import base64
+from oauth2client.service_account import ServiceAccountCredentials
+
+scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+
+# Decode the base64 string to JSON credentials
+creds_json = base64.b64decode(os.environ["GOOGLE_SHEETS_KEY_BASE64"]).decode("utf-8")
+creds_dict = json.loads(creds_json)
+creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+
 
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
