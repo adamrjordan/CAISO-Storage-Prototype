@@ -28,8 +28,10 @@ options.add_argument("--headless")
 options.add_argument("--no-sandbox")
 options.add_argument("--disable-dev-shm-usage")
 
-service = Service(ChromeDriverManager().install())
+driver_path = ChromeDriverManager().install()
+service = Service(executable_path=driver_path)
 driver = webdriver.Chrome(service=service, options=options)
+
 driver.get(WEB_URL)
 
 chart_data = driver.execute_script("""
