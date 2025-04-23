@@ -26,4 +26,4 @@ jobs:
           pip install selenium gspread oauth2client pandas
 
       - name: Run scraper
-        run: python caiso_storage.py
+        run: python caiso_scraper.py
