@@ -1,38 +1,35 @@
 import json
 import os
 import base64
+import gspread
+import pandas as pd
+from datetime import datetime
 from oauth2client.service_account import ServiceAccountCredentials
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from webdriver_manager.chrome import ChromeDriverManager
 
+# --- GOOGLE SHEETS AUTH ---
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-
-# Decode the base64 string to JSON credentials
 creds_json = base64.b64decode(os.environ["GOOGLE_SHEETS_KEY_BASE64"]).decode("utf-8")
 creds_dict = json.loads(creds_json)
 creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
-
-
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-import pandas as pd
-from datetime import datetime
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
+client = gspread.authorize(creds)
+spreadsheet = client.open("CAISO Storage Chart Data")
 
 # --- CONFIGURATION ---
 TARGET_DATE = "2025-03-31"
 WEB_URL = "https://www.caiso.com/documents/daily-energy-storage-report-" + datetime.strptime(TARGET_DATE, "%Y-%m-%d").strftime("%b-%d-%Y").lower() + ".html"
-CHROMEDRIVER_PATH = "C:\\chromedriver-win64\\chromedriver.exe"
-GOOGLE_CREDS_FILE = "google_creds.json"
-GOOGLE_SHEET_NAME = "CAISO Storage Chart Data"
 
 # --- SELENIUM SETUP ---
-service = Service(CHROMEDRIVER_PATH)
-options = webdriver.ChromeOptions()
+options = Options()
 options.add_argument("--headless")
-driver = webdriver.Chrome(service=service, options=options)
+options.add_argument("--no-sandbox")
+options.add_argument("--disable-dev-shm-usage")
 
-# --- LOAD PAGE & EXTRACT CHART DATA ---
+driver = webdriver.Chrome(ChromeDriverManager().install(), options=options)
 driver.get(WEB_URL)
+
 chart_data = driver.execute_script("""
     if (Highcharts && Highcharts.charts[0]) {
         return Highcharts.charts.map(function(chart) {
@@ -57,12 +54,6 @@ driver.quit()
 if not chart_data:
     raise RuntimeError("No Highcharts data found on the page.")
 
-# --- GOOGLE SHEETS AUTH ---
-scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-creds = ServiceAccountCredentials.from_json_keyfile_name(GOOGLE_CREDS_FILE, scope)
-client = gspread.authorize(creds)
-spreadsheet = client.open(GOOGLE_SHEET_NAME)
-
 # --- WRITE EACH CHART TO ITS OWN TAB ---
 for chart_index, chart in enumerate(chart_data):
     series_list = chart["series"]
@@ -82,6 +73,8 @@ for chart_index, chart in enumerate(chart_data):
 
     sheet.clear()
     sheet.append_rows([df.columns.tolist()] + df.values.tolist())
+
+print("✅ Scraper completed and data written to Google Sheets.")
 
 print("✅ All charts written to their respective Google Sheet tabs.")
 
