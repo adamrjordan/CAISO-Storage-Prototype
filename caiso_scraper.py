@@ -28,9 +28,16 @@ options.add_argument("--headless")
 options.add_argument("--no-sandbox")
 options.add_argument("--disable-dev-shm-usage")
 
+# Get path to chromedriver binary
 driver_path = ChromeDriverManager().install()
-service = Service(executable_path=driver_path)
+
+# If it returns a folder (due to a bad match), fall back to actual binary
+if os.path.isdir(driver_path):
+    driver_path = os.path.join(driver_path, "chromedriver")
+
+service = Service(driver_path)
 driver = webdriver.Chrome(service=service, options=options)
+
 
 driver.get(WEB_URL)
 
