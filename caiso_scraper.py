@@ -28,19 +28,24 @@ options.add_argument("--headless")
 options.add_argument("--no-sandbox")
 options.add_argument("--disable-dev-shm-usage")
 
-# Install ChromeDriver and fix broken zip path issue
+# Get ChromeDriver folder
 driver_dir = ChromeDriverManager().install()
 
-# Walk the directory to find the real binary
+# Walk the directory to find the actual binary
+driver_path = None
 for root, dirs, files in os.walk(driver_dir):
     for f in files:
         if f == "chromedriver":
             driver_path = os.path.join(root, f)
             break
-    else:
-        continue
-    break
+    if driver_path:
+        break
 
+if not driver_path:
+    print("❌ Could not find chromedriver binary inside the extracted folder.", file=sys.stderr)
+    sys.exit(1)
+
+# Launch Selenium with the real binary
 service = Service(executable_path=driver_path)
 driver = webdriver.Chrome(service=service, options=options)
 
