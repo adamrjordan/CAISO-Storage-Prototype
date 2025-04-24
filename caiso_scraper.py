@@ -31,16 +31,16 @@ options.add_argument("--disable-dev-shm-usage")
 
 # webdriver-manager returns a broken path — fix it manually
 driver_dir = ChromeDriverManager().install()
-
-# Assume real binary lives in the same folder as the broken file
 driver_path = os.path.join(os.path.dirname(driver_dir), "chromedriver")
 
-# Check if that file actually exists
+# Fix missing executable permission
 if not os.path.isfile(driver_path):
     print(f"❌ Expected chromedriver binary not found at: {driver_path}", file=sys.stderr)
     sys.exit(1)
 
-# Start Chrome with fixed path
+os.chmod(driver_path, 0o755)  # ✅ THIS is the key to fixing the permission error
+
+# Launch driver
 service = Service(executable_path=driver_path)
 driver = webdriver.Chrome(service=service, options=options)
 
