@@ -10,6 +10,7 @@ from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.service import Service
 import sys
+from datetime import datetime, timedelta
 
 # --- GOOGLE SHEETS AUTH ---
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -20,8 +21,9 @@ client = gspread.authorize(creds)
 spreadsheet = client.open("CAISO Storage Chart Data")
 
 # --- CONFIGURATION ---
-TARGET_DATE = "2025-03-31"
-WEB_URL = "https://www.caiso.com/documents/daily-energy-storage-report-" + datetime.strptime(TARGET_DATE, "%Y-%m-%d").strftime("%b-%d-%Y").lower() + ".html"
+# Use yesterday's date
+TARGET_DATE = (datetime.utcnow() - timedelta(days=1)).date()
+WEB_URL = f"https://www.caiso.com/documents/daily-energy-storage-report-{TARGET_DATE.strftime('%b-%d-%Y').lower()}.html"
 
 # --- SELENIUM SETUP ---
 options = Options()
