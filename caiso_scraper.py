@@ -31,6 +31,7 @@ options.add_argument("--disable-dev-shm-usage")
 
 # Get ChromeDriver folder
 driver_dir = ChromeDriverManager().install()
+print(f"📂 webdriver-manager downloaded to: {driver_dir}")
 
 # Walk the directory to find the actual binary
 driver_path = None
