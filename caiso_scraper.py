@@ -22,7 +22,7 @@ spreadsheet = client.open("CAISO Storage Chart Data")
 
 # --- CONFIGURATION ---
 # Use yesterday's date
-TARGET_DATE = (datetime.utcnow() - timedelta(days=1)).date()
+TARGET_DATE = (datetime.utcnow() - timedelta(days=2)).date()
 WEB_URL = f"https://www.caiso.com/documents/daily-energy-storage-report-{TARGET_DATE.strftime('%b-%d-%Y').lower()}.html"
 
 # --- SELENIUM SETUP ---
