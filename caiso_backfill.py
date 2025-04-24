@@ -21,8 +21,8 @@ client = gspread.authorize(creds)
 spreadsheet = client.open("CAISO Storage Chart Data")
 
 # --- BACKFILL CONFIG ---
-START_DATE = date(2024, 12, 1)
-END_DATE = date(2025, 3, 31)
+START_DATE = date(2025, 1, 1)
+END_DATE = date(2025, 1, 31)
 
 # --- CHROME OPTIONS ---
 options = Options()
