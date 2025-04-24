@@ -29,23 +29,20 @@ options.add_argument("--headless")
 options.add_argument("--no-sandbox")
 options.add_argument("--disable-dev-shm-usage")
 
-# Get ChromeDriver folder
+# webdriver-manager returns a broken path — fix it manually
 driver_dir = ChromeDriverManager().install()
-print(f"📂 webdriver-manager downloaded to: {driver_dir}")
 
-# Walk the directory to find the actual binary
-driver_path = None
-for root, dirs, files in os.walk(driver_dir):
-    for f in files:
-        if f == "chromedriver":
-            driver_path = os.path.join(root, f)
-            break
-    if driver_path:
-        break
+# Assume real binary lives in the same folder as the broken file
+driver_path = os.path.join(os.path.dirname(driver_dir), "chromedriver")
 
-if not driver_path:
-    print("❌ Could not find chromedriver binary inside the extracted folder.", file=sys.stderr)
+# Check if that file actually exists
+if not os.path.isfile(driver_path):
+    print(f"❌ Expected chromedriver binary not found at: {driver_path}", file=sys.stderr)
     sys.exit(1)
+
+# Start Chrome with fixed path
+service = Service(executable_path=driver_path)
+driver = webdriver.Chrome(service=service, options=options)
 
 # Launch Selenium with the real binary
 service = Service(executable_path=driver_path)
