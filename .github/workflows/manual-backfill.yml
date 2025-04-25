@@ -1,0 +1,27 @@
+name: Run CAISO Backfill
+
+on:
+  workflow_dispatch:  # Adds "Run workflow" button
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+
+    env:
+      GOOGLE_SHEETS_KEY_BASE64: ${{ secrets.GOOGLE_SHEETS_KEY_BASE64 }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: |
+          pip install selenium gspread oauth2client pandas webdriver-manager
+
+      - name: Run backfill script
+        run: python caiso_backfill.py
