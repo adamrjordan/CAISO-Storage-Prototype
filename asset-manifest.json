@@ -1,13 +1,13 @@
 {
   "files": {
     "main.css": "/CAISO-Storage-Prototype/static/css/main.9ab93a5f.css",
-    "main.js": "/CAISO-Storage-Prototype/static/js/main.ef217bad.js",
+    "main.js": "/CAISO-Storage-Prototype/static/js/main.57117842.js",
     "index.html": "/CAISO-Storage-Prototype/index.html",
     "main.9ab93a5f.css.map": "/CAISO-Storage-Prototype/static/css/main.9ab93a5f.css.map",
-    "main.ef217bad.js.map": "/CAISO-Storage-Prototype/static/js/main.ef217bad.js.map"
+    "main.57117842.js.map": "/CAISO-Storage-Prototype/static/js/main.57117842.js.map"
   },
   "entrypoints": [
     "static/css/main.9ab93a5f.css",
-    "static/js/main.ef217bad.js"
+    "static/js/main.57117842.js"
   ]
 }
