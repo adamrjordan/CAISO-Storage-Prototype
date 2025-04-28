@@ -11,6 +11,8 @@ from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.service import Service
 import sys
 from datetime import datetime, timedelta
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
 # --- GOOGLE SHEETS AUTH ---
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -53,10 +55,12 @@ driver = webdriver.Chrome(service=service, options=options)
 
 driver.get(WEB_URL)
 
-# NEW: Wait for Highcharts to exist
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
+if "404" in driver.title.lower() or "page not found" in driver.page_source.lower():
+    print(f"❌ No report found for {TARGET_DATE}. Skipping.")
+    driver.quit()
+    continue
 
+#Wait for Highcharts to exist
 WebDriverWait(driver, 30).until(
     lambda d: d.execute_script("return typeof Highcharts !== 'undefined' && Highcharts.charts.length > 0")
 )
