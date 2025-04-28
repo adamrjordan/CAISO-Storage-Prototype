@@ -58,7 +58,7 @@ driver.get(WEB_URL)
 if "404" in driver.title.lower() or "page not found" in driver.page_source.lower():
     print(f"❌ No report found for {TARGET_DATE}. Skipping.")
     driver.quit()
-    continue
+    sys.exit(0)
 
 #Wait for Highcharts to exist
 WebDriverWait(driver, 30).until(
