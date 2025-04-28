@@ -53,6 +53,14 @@ driver = webdriver.Chrome(service=service, options=options)
 
 driver.get(WEB_URL)
 
+# NEW: Wait for Highcharts to exist
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+
+WebDriverWait(driver, 30).until(
+    lambda d: d.execute_script("return typeof Highcharts !== 'undefined' && Highcharts.charts.length > 0")
+)
+
 chart_data = driver.execute_script("""
     if (Highcharts && Highcharts.charts[0]) {
         return Highcharts.charts.map(function(chart) {
