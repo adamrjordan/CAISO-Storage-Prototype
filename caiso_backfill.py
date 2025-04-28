@@ -106,6 +106,9 @@ for TARGET_DATE in [START_DATE + timedelta(days=n) for n in range((END_DATE - ST
                     print(f"✅ Appended {len(new_rows)} new rows to {sheet_title}.")
                 else:
                     print(f"⏭️ No new data to append to {sheet_title} — already exists.")
-
+                    
+        time.sleep(20)  # Pause 20 seconds after successfully processing one day
+        
     except Exception as e:
         print(f"❌ Failed to process {TARGET_DATE}: {e}")
+        time.sleep(20)  # Also sleep after failure, just to be gentle on API
