@@ -106,27 +106,25 @@ for chart_index, chart in enumerate(chart_data):
     except gspread.exceptions.WorksheetNotFound:
         sheet = spreadsheet.add_worksheet(title=sheet_title, rows="300", cols="10")
 
-# Get all values from the sheet (if any)
-existing = sheet.get_all_values()
+    # ✅ This must be INSIDE the loop
+    existing = sheet.get_all_values()
 
-# If sheet is empty, write headers and all data
-if not existing:
-    sheet.append_rows([df.columns.tolist()] + df.values.tolist())
-    print(f"✅ Sheet {sheet_title} was empty. Wrote full data.")
-else:
-    existing_timestamps = {row[0] for row in existing[1:]}  # skip header row
-
-    # Filter only rows with new timestamps
-    new_rows = [row for row in df.values.tolist() if row[0] not in existing_timestamps]
-
-    if new_rows:
-        sheet.append_rows(new_rows)
-        print(f"✅ Appended {len(new_rows)} new rows to {sheet_title}.")
+    if not existing:
+        sheet.append_rows([df.columns.tolist()] + df.values.tolist())
+        print(f"✅ Sheet {sheet_title} was empty. Wrote full data.")
     else:
-        print(f"⏭️ No new data to append to {sheet_title} — all timestamps already present.")
+        existing_timestamps = {row[0] for row in existing[1:]}  # skip header row
+
+        new_rows = [row for row in df.values.tolist() if row[0] not in existing_timestamps]
+
+        if new_rows:
+            sheet.append_rows(new_rows)
+            print(f"✅ Appended {len(new_rows)} new rows to {sheet_title}.")
+        else:
+            print(f"⏭️ No new data to append to {sheet_title} — all timestamps already present.")
 
 
-print("✅ Scraper completed and data written to Google Sheets.")
+
 
 print("✅ All charts written to their respective Google Sheet tabs.")
 
