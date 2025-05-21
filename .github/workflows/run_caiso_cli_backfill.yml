@@ -1,4 +1,4 @@
-name: Run CAISO Backfill
+name: Run CAISO CLI Backfill
 
 on:
   workflow_dispatch:  # Adds "Run workflow" button
@@ -25,4 +25,4 @@ jobs:
 
       - name: Run CLI backfill script
         run: |
-          python scripts/caiso_backfill_cli.py --start 2025-01-01 --end 2025-01-07
+          python caiso_backfill_cli.py --start 2025-01-01 --end 2025-01-07
