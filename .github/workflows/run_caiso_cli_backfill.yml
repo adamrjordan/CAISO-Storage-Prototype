@@ -25,4 +25,4 @@ jobs:
 
       - name: Run CLI backfill script
         run: |
-          python scripts/caiso_backfill_cli.py --start 2024-01-01 --end 2025-04-26
+          python scripts/caiso_backfill_cli.py --start 2025-01-01 --end 2025-01-07
