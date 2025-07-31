@@ -110,7 +110,10 @@ for chart_index, chart in enumerate(chart_data):
     existing = sheet.get_all_values()
 
     if not existing:
-        sheet.append_rows([df.columns.tolist()] + df.values.tolist())
+        sheet.append_rows(
+           [df.columns.tolist()] + df.values.tolist(),
+           value_input_option="USER_ENTERED",
+        )
         print(f"✅ Sheet {sheet_title} was empty. Wrote full data.")
     else:
         existing_timestamps = {row[0] for row in existing[1:]}  # skip header row
@@ -118,7 +121,7 @@ for chart_index, chart in enumerate(chart_data):
         new_rows = [row for row in df.values.tolist() if row[0] not in existing_timestamps]
 
         if new_rows:
-            sheet.append_rows(new_rows)
+            sheet.append_rows(new_rows, value_input_option="USER_ENTERED")
             print(f"✅ Appended {len(new_rows)} new rows to {sheet_title}.")
         else:
             print(f"⏭️ No new data to append to {sheet_title} — all timestamps already present.")
