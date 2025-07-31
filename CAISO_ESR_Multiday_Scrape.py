@@ -3,6 +3,7 @@ import os
 import base64
 import gspread
 import pandas as pd
+import math
 from datetime import datetime, timedelta
 from oauth2client.service_account import ServiceAccountCredentials
 from selenium import webdriver
@@ -35,6 +36,13 @@ if not os.path.isfile(driver_path):
 
 os.chmod(driver_path, 0o755)
 service = Service(executable_path=driver_path)
+
+# --- HELPER TO SANITIZE NON-JSON COMPLIANT FLOATS ---
+def sanitize_row(row):
+    return [
+        "" if isinstance(v, float) and (math.isnan(v) or math.isinf(v)) else v
+        for v in row
+    ]
 
 # --- LOOP OVER MULTIPLE DATES ---
 for offset in [2, 3, 4, 5]:
@@ -100,15 +108,18 @@ for offset in [2, 3, 4, 5]:
 
         existing = sheet.get_all_values()
         if not existing:
-            sheet.append_rows([df.columns.tolist()] + df.values.tolist())
+            sanitized = [sanitize_row(row) for row in df.values.tolist()]
+            sheet.append_rows([df.columns.tolist()] + sanitized)
             print(f"✅ Sheet {sheet_title} was empty. Wrote full data for {TARGET_DATE}.")
         else:
             existing_timestamps = {row[0] for row in existing[1:]}
             new_rows = [row for row in df.values.tolist() if row[0] not in existing_timestamps]
             if new_rows:
-                sheet.append_rows(new_rows)
-                print(f"✅ Appended {len(new_rows)} new rows to {sheet_title} for {TARGET_DATE}.")
+                sanitized_new = [sanitize_row(row) for row in new_rows]
+                sheet.append_rows(sanitized_new)
+                print(f"✅ Appended {len(sanitized_new)} new rows to {sheet_title} for {TARGET_DATE}.")
             else:
                 print(f"⏭️ No new data to append to {sheet_title} for {TARGET_DATE}.")
 
 print("\n✅ All eligible reports processed and data updated.")
+
