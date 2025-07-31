@@ -3,6 +3,7 @@ import os
 import sys
 import base64
 import time
+import math
 import gspread
 import pandas as pd
 from datetime import datetime, timedelta, date
@@ -21,14 +22,21 @@ client = gspread.authorize(creds)
 spreadsheet = client.open("CAISO Storage Chart Data")
 
 # --- BACKFILL CONFIG ---
-START_DATE = date(2024, 1, 1)
-END_DATE = date(2025, 4, 26)
+START_DATE = date(2025, 7, 1)
+END_DATE = date(2025, 7, 30)
 
 # --- CHROME OPTIONS ---
 options = Options()
 options.add_argument("--headless")
 options.add_argument("--no-sandbox")
 options.add_argument("--disable-dev-shm-usage")
+
+# --- SANITIZE FUNCTION ---
+def sanitize_row(row):
+    return [
+        "" if isinstance(v, float) and (math.isnan(v) or math.isinf(v)) else v
+        for v in row
+    ]
 
 # --- LOOP THROUGH EACH DATE ---
 for TARGET_DATE in [START_DATE + timedelta(days=n) for n in range((END_DATE - START_DATE).days + 1)]:
@@ -96,19 +104,35 @@ for TARGET_DATE in [START_DATE + timedelta(days=n) for n in range((END_DATE - ST
 
             existing = sheet.get_all_values()
             if not existing:
-                sheet.append_rows([df.columns.tolist()] + df.values.tolist())
+                sanitized = [sanitize_row(row) for row in df.values.tolist()]
+                all_rows = [df.columns.tolist()] + sanitized
+                body = {"values": all_rows}
+                client.request(
+                    "post",
+                    f"https://sheets.googleapis.com/v4/spreadsheets/{spreadsheet.id}/values/{sheet_title}!A1:append",
+                    params={"valueInputOption": "USER_ENTERED"},
+                    json=body
+                )
                 print(f"✅ Created new sheet: {sheet_title}")
             else:
                 existing_timestamps = {row[0] for row in existing[1:]}
                 new_rows = [row for row in df.values.tolist() if row[0] not in existing_timestamps]
                 if new_rows:
-                    sheet.append_rows(new_rows)
-                    print(f"✅ Appended {len(new_rows)} new rows to {sheet_title}.")
+                    sanitized_new = [sanitize_row(row) for row in new_rows]
+                    body = {"values": sanitized_new}
+                    client.request(
+                        "post",
+                        f"https://sheets.googleapis.com/v4/spreadsheets/{spreadsheet.id}/values/{sheet_title}!A1:append",
+                        params={"valueInputOption": "USER_ENTERED"},
+                        json=body
+                    )
+                    print(f"✅ Appended {len(sanitized_new)} new rows to {sheet_title}.")
                 else:
                     print(f"⏭️ No new data to append to {sheet_title} — already exists.")
-                    
+
         time.sleep(20)  # Pause 20 seconds after successfully processing one day
-        
+
     except Exception as e:
         print(f"❌ Failed to process {TARGET_DATE}: {e}")
-        time.sleep(20)  # Also sleep after failure, just to be gentle on API
+        time.sleep(20)
+
