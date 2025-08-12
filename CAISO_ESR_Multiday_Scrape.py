@@ -103,8 +103,8 @@ for offset in [2, 3, 4, 5]:
             pd.to_datetime(xs, unit="ms", utc=True)
               .tz_convert("US/Pacific")
               .tz_localize(None)
-            )
-        ts_str = ts.dt.strftime("%Y-%m-%d %H:%M:%S")
+        )
+        ts_str = ts.strftime("%Y-%m-%d %H:%M:%S")   # works on DatetimeIndex
 
         # DataFrame with stable de-dupe key
         df = pd.DataFrame({"Timestamp": ts_str})
