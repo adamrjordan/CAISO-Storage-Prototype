@@ -61,24 +61,24 @@ for offset in [2, 3, 4, 5]:
         WebDriverWait(driver, 30).until(
             lambda d: d.execute_script("return typeof Highcharts !== 'undefined' && Highcharts.charts.length > 0")
         )
+        # Pull raw xData/yData for all points (not just visible) for each series
         chart_data = driver.execute_script("""
-            if (Highcharts && Highcharts.charts[0]) {
-                return Highcharts.charts.map(function(chart) {
-                    return {
-                        title: chart.title ? chart.title.textStr : null,
-                        series: chart.series.map(function(s) {
-                            return {
-                                name: s.name,
-                                data: s.data.map(function(d) {
-                                    return { x: d.x, y: d.y };
-                                })
-                            };
-                        })
-                    };
-                });
-            } else {
-                return null;
-            }
+          if (Highcharts && Highcharts.charts[0]) {
+            return Highcharts.charts.map(function(chart) {
+              return {
+                title: chart.title ? chart.title.textStr : null,
+                series: chart.series.map(function(s) {
+                  return {
+                    name: s.name,
+                    x: (s.xData || []).slice(),   // ms since epoch
+                    y: (s.yData || []).slice()
+                  };
+                })
+              };
+            });
+          } else {
+            return null;
+          }
         """)
     finally:
         driver.quit()
@@ -91,13 +91,25 @@ for offset in [2, 3, 4, 5]:
     for chart_index, chart in enumerate(chart_data):
         series_list = chart["series"]
         sheet_title = f"Chart_{chart_index + 1}"
-        datetimes = pd.date_range(start=f"{TARGET_DATE} 00:00", freq="5min", periods=len(series_list[0]["data"]))
-        df = pd.DataFrame({"Timestamp": datetimes})
 
+        # Use the first series' x-values as the master timeline
+        xs = series_list[0]["x"] if series_list and "x" in series_list[0] else []
+        if not xs:
+            print(f"⚠️ No data points in {sheet_title} for {TARGET_DATE}.")
+            continue
+
+        # Convert ms epoch -> US/Pacific timestamps (strings for Sheets)
+        ts = pd.to_datetime(xs, unit="ms", utc=True).tz_convert("US/Pacific").astype(str)
+        df = pd.DataFrame({"Timestamp": ts})
+
+        # Attach each series' y-values (aligned by Highcharts)
         for s in series_list:
-            df[s["name"]] = [point["y"] for point in s["data"]]
+            df[s["name"]] = s["y"]
 
-        df["Timestamp"] = df["Timestamp"].astype(str)
+        # Optional: quick cadence info for logs
+        deltas = pd.to_datetime(xs, unit="ms").to_series().diff().dt.total_seconds().div(60).dropna()
+        if not deltas.empty:
+            print(f"ℹ️ {sheet_title} {TARGET_DATE}: points={len(xs)}, median Δ={int(deltas.median())} min")
 
         try:
             sheet = spreadsheet.worksheet(sheet_title)
@@ -113,7 +125,6 @@ for offset in [2, 3, 4, 5]:
         if not existing:
             sanitized = [sanitize_row(row) for row in df.values.tolist()]
             all_rows = [df.columns.tolist()] + sanitized
-            # First write: use update at A1
             sheet.update("A1", all_rows, value_input_option="USER_ENTERED")
             print(f"✅ Sheet {sheet_title} was empty. Wrote full data for {TARGET_DATE}.")
         else:
@@ -121,10 +132,10 @@ for offset in [2, 3, 4, 5]:
             new_rows = [row for row in df.values.tolist() if row[0] not in existing_timestamps]
             if new_rows:
                 sanitized_new = [sanitize_row(row) for row in new_rows]
-                # Append just the new rows
                 sheet.append_rows(sanitized_new, value_input_option="USER_ENTERED")
                 print(f"✅ Appended {len(sanitized_new)} new rows to {sheet_title} for {TARGET_DATE}.")
             else:
                 print(f"⏭️ No new data to append to {sheet_title} for {TARGET_DATE}.")
 
 print("\n✅ All eligible reports processed and data updated.")
+
