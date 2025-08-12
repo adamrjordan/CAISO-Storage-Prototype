@@ -29,11 +29,9 @@ options.add_argument("--disable-dev-shm-usage")
 
 driver_dir = ChromeDriverManager().install()
 driver_path = os.path.join(os.path.dirname(driver_dir), "chromedriver")
-
 if not os.path.isfile(driver_path):
     print(f"❌ Expected chromedriver binary not found at: {driver_path}", file=sys.stderr)
     sys.exit(1)
-
 os.chmod(driver_path, 0o755)
 service = Service(executable_path=driver_path)
 
@@ -94,7 +92,7 @@ for offset in [2, 3, 4, 5]:
         series_list = chart["series"]
         sheet_title = f"Chart_{chart_index + 1}"
         datetimes = pd.date_range(start=f"{TARGET_DATE} 00:00", freq="5min", periods=len(series_list[0]["data"]))
-        df = pd.DataFrame({ "Timestamp": datetimes })
+        df = pd.DataFrame({"Timestamp": datetimes})
 
         for s in series_list:
             df[s["name"]] = [point["y"] for point in s["data"]]
@@ -104,37 +102,29 @@ for offset in [2, 3, 4, 5]:
         try:
             sheet = spreadsheet.worksheet(sheet_title)
         except gspread.exceptions.WorksheetNotFound:
-            sheet = spreadsheet.add_worksheet(title=sheet_title, rows="300", cols="10")
-            sheet = spreadsheet.worksheet(sheet_title)  # Refresh reference
+            # Pre-size with enough rows/cols to fit the first write
+            rows_needed = max(300, len(df) + 1)
+            cols_needed = max(10, len(df.columns))
+            sheet = spreadsheet.add_worksheet(title=sheet_title, rows=str(rows_needed), cols=str(cols_needed))
+            sheet = spreadsheet.worksheet(sheet_title)
 
         existing = sheet.get_all_values()
+
         if not existing:
             sanitized = [sanitize_row(row) for row in df.values.tolist()]
             all_rows = [df.columns.tolist()] + sanitized
-            body = {"values": all_rows}
-            client.request(
-                "post",
-                f"https://sheets.googleapis.com/v4/spreadsheets/{spreadsheet.id}/values/{sheet_title}!A1:append",
-                params={"valueInputOption": "USER_ENTERED"},
-                json=body
-            )
+            # First write: use update at A1
+            sheet.update("A1", all_rows, value_input_option="USER_ENTERED")
             print(f"✅ Sheet {sheet_title} was empty. Wrote full data for {TARGET_DATE}.")
         else:
             existing_timestamps = {row[0] for row in existing[1:]}
             new_rows = [row for row in df.values.tolist() if row[0] not in existing_timestamps]
             if new_rows:
                 sanitized_new = [sanitize_row(row) for row in new_rows]
-                body = {"values": sanitized_new}
-                client.request(
-                    "post",
-                    f"https://sheets.googleapis.com/v4/spreadsheets/{spreadsheet.id}/values/{sheet_title}!A1:append",
-                    params={"valueInputOption": "USER_ENTERED"},
-                    json=body
-                )
+                # Append just the new rows
+                sheet.append_rows(sanitized_new, value_input_option="USER_ENTERED")
                 print(f"✅ Appended {len(sanitized_new)} new rows to {sheet_title} for {TARGET_DATE}.")
             else:
                 print(f"⏭️ No new data to append to {sheet_title} for {TARGET_DATE}.")
 
 print("\n✅ All eligible reports processed and data updated.")
-
-
