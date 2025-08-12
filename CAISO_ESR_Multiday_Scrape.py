@@ -98,9 +98,17 @@ for offset in [2, 3, 4, 5]:
             print(f"⚠️ No data points in {sheet_title} for {TARGET_DATE}.")
             continue
 
-        # Convert ms epoch -> US/Pacific timestamps (strings for Sheets)
-        ts = pd.to_datetime(xs, unit="ms", utc=True).tz_convert("US/Pacific").astype(str)
-        df = pd.DataFrame({"Timestamp": ts})
+        # Build Timestamp (Pacific, no timezone info so Sheets parses uniformly)
+        ts = (
+            pd.to_datetime(xs, unit="ms", utc=True)
+              .tz_convert("US/Pacific")
+              .tz_localize(None)
+            )
+        ts_str = ts.dt.strftime("%Y-%m-%d %H:%M:%S")
+
+        # DataFrame with stable de-dupe key
+        df = pd.DataFrame({"Timestamp": ts_str})
+        df.insert(1, "EpochMs", xs)  # stable key
 
         # Attach each series' y-values (aligned by Highcharts)
         for s in series_list:
@@ -128,14 +136,34 @@ for offset in [2, 3, 4, 5]:
             sheet.update("A1", all_rows, value_input_option="USER_ENTERED")
             print(f"✅ Sheet {sheet_title} was empty. Wrote full data for {TARGET_DATE}.")
         else:
-            existing_timestamps = {row[0] for row in existing[1:]}
-            new_rows = [row for row in df.values.tolist() if row[0] not in existing_timestamps]
+            # Build a set of existing keys using EpochMs if present, else Timestamp
+            existing_keys = set()
+            header = existing[0] if existing else []
+            has_epoch_col = len(header) > 1 and header[1] == "EpochMs"
+
+            for row in existing[1:]:
+                # Prefer EpochMs if available in existing rows
+                if has_epoch_col and len(row) > 1 and row[1]:
+                    existing_keys.add(str(row[1]))
+                # Also include Timestamp as fallback for legacy rows
+                if row and row[0]:
+                    existing_keys.add(row[0])
+
+            # Keep rows whose EpochMs AND Timestamp are both not already present
+            new_rows = []
+            for row in df.values.tolist():
+                ts_key = row[0]             # formatted timestamp
+                epoch_key = str(row[1])     # epoch ms
+                if (epoch_key not in existing_keys) and (ts_key not in existing_keys):
+                    new_rows.append(row)
+
             if new_rows:
-                sanitized_new = [sanitize_row(row) for row in new_rows]
+                sanitized_new = [sanitize_row(r) for r in new_rows]
                 sheet.append_rows(sanitized_new, value_input_option="USER_ENTERED")
                 print(f"✅ Appended {len(sanitized_new)} new rows to {sheet_title} for {TARGET_DATE}.")
             else:
                 print(f"⏭️ No new data to append to {sheet_title} for {TARGET_DATE}.")
 
 print("\n✅ All eligible reports processed and data updated.")
+
 
