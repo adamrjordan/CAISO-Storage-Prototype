@@ -35,12 +35,35 @@ if not os.path.isfile(driver_path):
 os.chmod(driver_path, 0o755)
 service = Service(executable_path=driver_path)
 
-# --- HELPER TO SANITIZE NON-JSON COMPLIANT FLOATS ---
+# --- HELPERS ---
 def sanitize_row(row):
     return [
         "" if isinstance(v, float) and (math.isnan(v) or math.isinf(v)) else v
         for v in row
     ]
+
+def parse_sheet_timestamps_to_epoch_ms(existing_rows):
+    """
+    Build a set of epoch-ms keys from the sheet's first column (Timestamp),
+    tolerating mixed display formats like '8/7/2025 9:05:00' and '2025-08-07 09:05:00'.
+    """
+    if not existing_rows:
+        return set()
+    ts_strings = [r[0] for r in existing_rows if len(r) > 0 and r[0]]
+    if not ts_strings:
+        return set()
+    s = pd.to_datetime(pd.Series(ts_strings), errors="coerce", infer_datetime_format=True)
+    s = s.dropna()
+    # Treat timestamps as US/Pacific local, then convert to UTC to match Highcharts epochs
+    try:
+        s = s.dt.tz_localize("US/Pacific", ambiguous="infer", nonexistent="NaT")
+    except TypeError:
+        # Older pandas without 'nonexistent' kw
+        s = s.dt.tz_localize("US/Pacific", ambiguous="infer")
+    s = s.dropna()
+    s = s.dt.tz_convert("UTC")
+    epoch_ms = (s.view("int64") // 1_000_000).astype(str)
+    return set(epoch_ms.tolist())
 
 # --- LOOP OVER MULTIPLE DATES ---
 for offset in [2, 3, 4, 5]:
@@ -70,7 +93,7 @@ for offset in [2, 3, 4, 5]:
                 series: chart.series.map(function(s) {
                   return {
                     name: s.name,
-                    x: (s.xData || []).slice(),   // ms since epoch
+                    x: (s.xData || []).slice(),   // ms since epoch (UTC)
                     y: (s.yData || []).slice()
                   };
                 })
@@ -98,23 +121,24 @@ for offset in [2, 3, 4, 5]:
             print(f"⚠️ No data points in {sheet_title} for {TARGET_DATE}.")
             continue
 
-        # Build Timestamp (Pacific, no timezone info so Sheets parses uniformly)
+        # Build Timestamp (Pacific, remove tz so Sheets parses uniformly)
         ts = (
             pd.to_datetime(xs, unit="ms", utc=True)
               .tz_convert("US/Pacific")
               .tz_localize(None)
         )
-        ts_str = ts.strftime("%Y-%m-%d %H:%M:%S")   # works on DatetimeIndex
+        ts_str = ts.strftime("%Y-%m-%d %H:%M:%S")   # consistent parse in Sheets
 
-        # DataFrame with stable de-dupe key
-        df = pd.DataFrame({"Timestamp": ts_str})
-        df.insert(1, "EpochMs", xs)  # stable key
-
-        # Attach each series' y-values (aligned by Highcharts)
+        # DataFrame (keep EpochMs INTERNAL ONLY for de-dupe)
+        df_full = pd.DataFrame({"Timestamp": ts_str})
+        df_full.insert(1, "EpochMs", xs)  # internal key
         for s in series_list:
-            df[s["name"]] = s["y"]
+            df_full[s["name"]] = s["y"]
 
-        # Optional: quick cadence info for logs
+        # What we actually write (no EpochMs column)
+        write_df = df_full.drop(columns=["EpochMs"])
+
+        # Optional: log cadence
         deltas = pd.to_datetime(xs, unit="ms").to_series().diff().dt.total_seconds().div(60).dropna()
         if not deltas.empty:
             print(f"ℹ️ {sheet_title} {TARGET_DATE}: points={len(xs)}, median Δ={int(deltas.median())} min")
@@ -122,43 +146,28 @@ for offset in [2, 3, 4, 5]:
         try:
             sheet = spreadsheet.worksheet(sheet_title)
         except gspread.exceptions.WorksheetNotFound:
-            # Pre-size with enough rows/cols to fit the first write
-            rows_needed = max(300, len(df) + 1)
-            cols_needed = max(10, len(df.columns))
+            rows_needed = max(300, len(write_df) + 1)
+            cols_needed = max(10, len(write_df.columns))
             sheet = spreadsheet.add_worksheet(title=sheet_title, rows=str(rows_needed), cols=str(cols_needed))
             sheet = spreadsheet.worksheet(sheet_title)
 
         existing = sheet.get_all_values()
 
         if not existing:
-            sanitized = [sanitize_row(row) for row in df.values.tolist()]
-            all_rows = [df.columns.tolist()] + sanitized
+            sanitized = [sanitize_row(row) for row in write_df.values.tolist()]
+            all_rows = [write_df.columns.tolist()] + sanitized
             sheet.update("A1", all_rows, value_input_option="USER_ENTERED")
             print(f"✅ Sheet {sheet_title} was empty. Wrote full data for {TARGET_DATE}.")
         else:
-            # Build a set of existing keys using EpochMs if present, else Timestamp
-            existing_keys = set()
-            header = existing[0] if existing else []
-            has_epoch_col = len(header) > 1 and header[1] == "EpochMs"
+            # Robust de-dupe: parse existing Timestamps -> epoch ms
+            existing_epoch_keys = parse_sheet_timestamps_to_epoch_ms(existing[1:])
+            # Keep only rows whose EpochMs aren't already present
+            new_full_rows = [row for row in df_full.values.tolist() if str(row[1]) not in existing_epoch_keys]
 
-            for row in existing[1:]:
-                # Prefer EpochMs if available in existing rows
-                if has_epoch_col and len(row) > 1 and row[1]:
-                    existing_keys.add(str(row[1]))
-                # Also include Timestamp as fallback for legacy rows
-                if row and row[0]:
-                    existing_keys.add(row[0])
-
-            # Keep rows whose EpochMs AND Timestamp are both not already present
-            new_rows = []
-            for row in df.values.tolist():
-                ts_key = row[0]             # formatted timestamp
-                epoch_key = str(row[1])     # epoch ms
-                if (epoch_key not in existing_keys) and (ts_key not in existing_keys):
-                    new_rows.append(row)
-
-            if new_rows:
-                sanitized_new = [sanitize_row(r) for r in new_rows]
+            if new_full_rows:
+                # Drop EpochMs before writing
+                to_append = pd.DataFrame(new_full_rows, columns=df_full.columns).drop(columns=["EpochMs"])
+                sanitized_new = [sanitize_row(r) for r in to_append.values.tolist()]
                 sheet.append_rows(sanitized_new, value_input_option="USER_ENTERED")
                 print(f"✅ Appended {len(sanitized_new)} new rows to {sheet_title} for {TARGET_DATE}.")
             else:
